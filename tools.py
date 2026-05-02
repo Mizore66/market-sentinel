@@ -117,8 +117,19 @@ def search_market_news(query: str) -> str:
 
     try:
         from langchain_community.tools import DuckDuckGoSearchRun
+        from langchain_community.utilities.duckduckgo_search import (
+            DuckDuckGoSearchAPIWrapper,
+        )
 
-        search = DuckDuckGoSearchRun()
+        # ``source="news"`` + weekly window fits market-news questions better than
+        # plain web snippets. Requires the ``ddgs`` PyPI package (see requirements.txt).
+        search = DuckDuckGoSearchRun(
+            api_wrapper=DuckDuckGoSearchAPIWrapper(
+                source="news",
+                time="w",
+                max_results=8,
+            )
+        )
         result = search.invoke(query)
         if not result or not result.strip():
             return f"No news results found for query: {query!r}"

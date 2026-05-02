@@ -31,7 +31,7 @@ tool calls so you can watch it think.
 | ------------ | --------------------------------------- | ------------------------------ |
 | LLM          | **Groq `llama-3.3-70b-versatile`**      | Free tier, fast inference      |
 | Framework    | LangChain `create_tool_calling_agent`   | Native tool-calling for ReAct  |
-| Tools        | `yfinance`, `duckduckgo-search`         | Zero-auth, free data sources   |
+| Tools        | `yfinance`, `ddgs` (DuckDuckGo)         | Zero-auth, free data sources   |
 | UI           | Streamlit + `StreamlitCallbackHandler`  | Live "thought process" visible |
 | Tests        | `pytest`                                | Tool routing + safety checks   |
 

@@ -5,6 +5,8 @@ langchain-core>=0.3.15
 langchain-community>=0.3.5
 langchain-groq>=0.2.1
 yfinance>=0.2.50
-duckduckgo-search>=6.3.5
+# LangChain's DuckDuckGo utilities import ``ddgs`` (PyPI: ddgs), not the older
+# ``duckduckgo-search`` package alone. Without ``ddgs``, news search fails at runtime.
+ddgs>=9.0
 python-dotenv>=1.0.1
 pytest>=8.3.3
