@@ -23,25 +23,41 @@ except ImportError:  # pragma: no cover - exercised on langchain<1.0
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from tools import ALL_TOOLS
+from tools import ALL_TOOLS as BASE_TOOLS
 
 load_dotenv()
+
+
+def _all_tools() -> list:
+    """Combine base tools (price + news) with the extension tools.
+
+    Extras (SEC 10-K RAG, sentiment, Reddit buzz, uploaded-doc RAG, technical
+    history) are imported lazily so the base agent still works if optional
+    deps are missing.
+    """
+    try:
+        from tools_extra import EXTRA_TOOLS
+
+        return [*BASE_TOOLS, *EXTRA_TOOLS]
+    except Exception:  # pragma: no cover
+        return list(BASE_TOOLS)
+
 
 SYSTEM_PROMPT = (
     "You are Market Sentinel, an expert financial AI analyst.\n"
     "You MUST use the provided tools to fetch real-time data before answering "
     "user queries about prices, fundamentals, or news.\n"
-    "Rules:\n"
-    "1. For numeric quotes (price, P/E, market cap, 52-week range) ALWAYS call "
-    "   `get_stock_price` first. Never invent numbers.\n"
-    "2. For qualitative or event-driven questions (news, earnings commentary, "
-    "   macro events) call `search_market_news`.\n"
-    "3. If a tool returns an error or empty result, say so explicitly. "
-    "   Do NOT fabricate data to fill the gap.\n"
-    "4. Keep answers direct and concise. Use short bullet points where useful "
-    "   and always cite the ticker symbol you queried.\n"
-    "5. If the user asks something unrelated to finance, politely steer them "
-    "   back to market topics."
+    "Tool selection rules:\n"
+    "1. Numeric quotes -> `get_stock_price`. Never invent numbers.\n"
+    "2. Trend / volatility / drawdown questions -> `get_price_history`.\n"
+    "3. Breaking headlines -> `search_market_news`.\n"
+    "4. Aggregate news vibe (positive / neutral / negative) -> `get_market_sentiment`.\n"
+    "5. Retail / Reddit chatter -> `get_reddit_buzz`.\n"
+    "6. Risks, business segments, MD&A, anything an annual report covers -> `query_sec_10k`.\n"
+    "7. The user uploaded a document -> `query_uploaded_document`.\n"
+    "If a tool returns an error or empty result, say so explicitly. Do NOT "
+    "fabricate data. Keep answers direct, use short bullets, cite tickers, and "
+    "preserve any source URLs that the tools returned."
 )
 
 
@@ -80,6 +96,7 @@ def _build_llm() -> BaseChatModel:
 def build_agent_executor(llm: BaseChatModel | None = None) -> AgentExecutor:
     """Compose the prompt, LLM, and tools into an ``AgentExecutor``."""
     chat_model = llm or _build_llm()
+    tools = _all_tools()
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -90,11 +107,11 @@ def build_agent_executor(llm: BaseChatModel | None = None) -> AgentExecutor:
         ]
     )
 
-    agent = create_tool_calling_agent(chat_model, ALL_TOOLS, prompt)
+    agent = create_tool_calling_agent(chat_model, tools, prompt)
 
     return AgentExecutor(
         agent=agent,
-        tools=ALL_TOOLS,
+        tools=tools,
         verbose=False,
         return_intermediate_steps=True,
         handle_parsing_errors=True,

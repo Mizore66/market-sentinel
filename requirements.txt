@@ -4,9 +4,17 @@ langchain-classic>=1.0.0; python_version >= "3.10"
 langchain-core>=0.3.15
 langchain-community>=0.3.5
 langchain-groq>=0.2.1
+langgraph>=1.0.0
 yfinance>=0.2.50
 # LangChain's DuckDuckGo utilities import ``ddgs`` (PyPI: ddgs), not the older
 # ``duckduckgo-search`` package alone. Without ``ddgs``, news search fails at runtime.
 ddgs>=9.0
+# Extensions: 10-K RAG, sentiment, executive brief PDF export
+pypdf>=5.1.0
+scikit-learn>=1.5.0
+vaderSentiment>=3.3.2
+fpdf2>=2.8.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
 python-dotenv>=1.0.1
 pytest>=8.3.3
