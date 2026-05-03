@@ -207,6 +207,18 @@ def test_build_pdf_brief_returns_pdf_bytes() -> None:
     assert len(pdf) > 500
 
 
+def test_build_pdf_brief_handles_unicode_em_dash() -> None:
+    """Helvetica cannot draw U+2014; the exporter must normalize to ASCII."""
+    payload = _sample_payload()
+    payload["answer"] = (
+        "Revenue grew sharply\u2014especially in Q4\u2014beating guidance. "
+        "Also testing &#8212; entity form."
+    )
+    pdf = build_pdf_brief(**payload)
+    assert pdf.startswith(b"%PDF")
+    assert len(pdf) > 500
+
+
 def test_markdown_to_html_strips_hash_headings_for_pdf_engine() -> None:
     """LLM answers use ``##`` / ``**`` Markdown; HTML output must not keep raw hashes."""
     html = _markdown_to_html_fragment("## Section\n\n**Bold** and [a link](https://x.com).")

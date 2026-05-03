@@ -142,6 +142,8 @@ two download buttons:
   Prose sections are converted from **Markdown to HTML** (`markdown` library
   + `FPDF.write_html`) so headings, bold, lists, links, tables, and fenced
   code blocks render as real typography instead of raw `##` / `**` text.
+  Unicode punctuation that Helvetica cannot draw (em dash `—`, smart quotes,
+  etc.) is normalized to ASCII before rendering so PDF export does not fail.
 
 The PDF includes a research disclaimer in the footer.
 

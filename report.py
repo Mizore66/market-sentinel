@@ -137,19 +137,82 @@ def _extract_sources(answer: str, steps: list[Any] | None) -> list[str]:
 
 
 _PDF_REPLACEMENTS = {
+    # Smart quotes / apostrophes
     "\u2018": "'",
     "\u2019": "'",
     "\u201c": '"',
     "\u201d": '"',
-    "\u2013": "-",
-    "\u2014": "-",
-    "\u2026": "...",
+    # Dashes (Helvetica / WinAnsi cannot render these; LLMs love em dashes)
+    "\u2010": "-",  # hyphen
+    "\u2011": "-",  # non-breaking hyphen
+    "\u2012": "-",  # figure dash
+    "\u2013": "-",  # en dash
+    "\u2014": "--",  # em dash -> ASCII pair (readable in PDFs)
+    "\u2015": "--",  # horizontal bar
+    "\u2212": "-",  # minus sign
+    "\u2043": "-",  # hyphen bullet
+    # Spaces / invisible characters that break layout or encoding
     "\u00a0": " ",
+    "\u2002": " ",
+    "\u2003": " ",
+    "\u2009": " ",
+    "\u200a": " ",
+    "\u200b": "",
+    "\u200c": "",
+    "\u200d": "",
+    "\u202f": " ",
+    "\u2060": "",
+    "\ufeff": "",
+    "\u00ad": "",  # soft hyphen
+    # Bullets / ellipsis / primes
     "\u2022": "*",
+    "\u2026": "...",
+    "\u00b7": ".",
+    "\u2032": "'",
+    "\u2033": '"',
+    # Common math / symbols that appear in finance copy
+    "\u2264": "<=",
+    "\u2265": ">=",
+    "\u00d7": "x",
 }
 
 
+def _strip_xml_char_refs_to_ascii(html: str) -> str:
+    """Replace dash-like ``&#...;`` / ``&#x...;`` references with plain ASCII.
+
+    If these are left in the HTML string, fpdf2 expands them back to Unicode
+    code points and Helvetica raises the same error as for a raw ``—`` character.
+    """
+
+    def _hex_repl(match: re.Match[str]) -> str:
+        cp = int(match.group(1), 16)
+        if cp in (0x2014, 0x2015):
+            return "--"
+        if cp in (0x2013, 0x2012, 0x2212):
+            return "-"
+        return match.group(0)
+
+    def _dec_repl(match: re.Match[str]) -> str:
+        cp = int(match.group(1))
+        if cp in (8212, 8213):
+            return "--"
+        if cp in (8211, 8210, 8722):
+            return "-"
+        return match.group(0)
+
+    html = re.sub(r"&#x([\da-fA-F]+);", _hex_repl, html, flags=re.IGNORECASE)
+    html = re.sub(r"&#(\d+);", _dec_repl, html)
+    return html
+
+
 def _safe_for_latin1(text: str) -> str:
+    """Map typographic Unicode to ASCII, then coerce to Latin-1 for core PDF fonts.
+
+    ``FPDF.write_html`` defaults to Helvetica, which only covers a limited glyph
+    set. Characters such as U+2014 (em dash) raise ``FPDFException`` unless we
+    swap in a Unicode TTF. Normalizing here keeps the dependency footprint tiny
+    (no bundled font files) while remaining readable in analyst-style prose.
+    """
     for src, dst in _PDF_REPLACEMENTS.items():
         text = text.replace(src, dst)
     return text.encode("latin-1", "replace").decode("latin-1")
@@ -166,12 +229,19 @@ def _markdown_to_html_fragment(md: str) -> str:
     import markdown
 
     text = (md or "").strip() or "_Empty._"
+    # Strip / replace Unicode punctuation *before* Markdown so fenced code,
+    # tables, and body text never feed raw em dashes etc. into ``write_html``.
+    text = _safe_for_latin1(text)
     # ``nl2br`` keeps single newlines inside paragraphs (common in chat output).
     # ``fenced_code`` + ``tables`` match typical model / tool JSON formatting.
-    return markdown.markdown(
+    html = markdown.markdown(
         text,
         extensions=["nl2br", "fenced_code", "tables"],
     )
+    html = _strip_xml_char_refs_to_ascii(html)
+    # Second pass: Markdown rarely re-introduces problematic chars, but HTML
+    # entities decoded inside fpdf could; this keeps the HTML string WinAnsi-safe.
+    return _safe_for_latin1(html)
 
 
 def _pdf_write_markdown_block(pdf: "FPDF", md: str) -> None:
@@ -206,6 +276,7 @@ def _pdf_write_sources_html(pdf: "FPDF", urls: list[str]) -> None:
 
 
 def _html_escape_attr(value: str) -> str:
+    value = _safe_for_latin1(value)
     return (
         value.replace("&", "&amp;")
         .replace('"', "&quot;")
@@ -215,6 +286,7 @@ def _html_escape_attr(value: str) -> str:
 
 
 def _html_escape_text(value: str) -> str:
+    value = _safe_for_latin1(value)
     return (
         value.replace("&", "&amp;")
         .replace("<", "&lt;")
