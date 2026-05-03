@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from fpdf import FPDF
 
 
 def _now() -> str:
@@ -152,6 +155,73 @@ def _safe_for_latin1(text: str) -> str:
     return text.encode("latin-1", "replace").decode("latin-1")
 
 
+def _markdown_to_html_fragment(md: str) -> str:
+    """Turn GitHub-flavoured-ish Markdown into HTML for :meth:`FPDF.write_html`.
+
+    The LLM answers (and specialist briefs) are usually Markdown: ``##`` headings,
+    ``**bold**``, lists, links, ``---`` rules, and fenced `` ```json`` blocks.
+    Feeding that HTML into fpdf2 renders it as real typography instead of raw
+    ``##`` / ``**`` characters in the PDF.
+    """
+    import markdown
+
+    text = (md or "").strip() or "_Empty._"
+    # ``nl2br`` keeps single newlines inside paragraphs (common in chat output).
+    # ``fenced_code`` + ``tables`` match typical model / tool JSON formatting.
+    return markdown.markdown(
+        text,
+        extensions=["nl2br", "fenced_code", "tables"],
+    )
+
+
+def _pdf_write_markdown_block(pdf: "FPDF", md: str) -> None:
+    """Render a Markdown prose block using fpdf2's HTML engine."""
+    from fpdf import FPDF
+
+    assert isinstance(pdf, FPDF)
+    html = _markdown_to_html_fragment(md)
+    with pdf.local_context():
+        pdf.write_html(
+            html,
+            warn_on_tags_not_matching=False,
+        )
+    pdf.ln(2)
+
+
+def _pdf_write_sources_html(pdf: "FPDF", urls: list[str]) -> None:
+    """Render extracted URLs as a clickable bullet list."""
+    from fpdf import FPDF
+
+    assert isinstance(pdf, FPDF)
+    if not urls:
+        return
+    items = "".join(
+        f'<li><a href="{_html_escape_attr(u)}">{_html_escape_text(u)}</a></li>'
+        for u in urls
+    )
+    html = f"<ul>{items}</ul>"
+    with pdf.local_context():
+        pdf.write_html(html, warn_on_tags_not_matching=False)
+    pdf.ln(2)
+
+
+def _html_escape_attr(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _html_escape_text(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 def build_pdf_brief(
     *,
     question: str,
@@ -217,7 +287,7 @@ def build_pdf_brief(
     pdf.ln(3)
 
     h2("Question")
-    body(question.strip())
+    _pdf_write_markdown_block(pdf, question.strip())
 
     if sentiment:
         h2("Aggregate Sentiment")
@@ -227,15 +297,15 @@ def build_pdf_brief(
         )
 
     h2("Final Answer")
-    body(answer.strip() or "(no answer)")
+    _pdf_write_markdown_block(pdf, answer.strip() or "(no answer)")
 
     if technical_brief:
         h2("Technical Analyst")
-        body(technical_brief.strip())
+        _pdf_write_markdown_block(pdf, technical_brief.strip())
 
     if fundamental_brief:
         h2("Fundamental Researcher")
-        body(fundamental_brief.strip())
+        _pdf_write_markdown_block(pdf, fundamental_brief.strip())
 
     if intermediate_steps:
         h2("Reasoning Trail")
@@ -251,8 +321,7 @@ def build_pdf_brief(
     sources = _extract_sources(answer, intermediate_steps)
     if sources:
         h2("Sources")
-        for url in sources:
-            body(f"- {url}")
+        _pdf_write_sources_html(pdf, sources)
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)

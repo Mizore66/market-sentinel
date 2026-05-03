@@ -19,7 +19,11 @@ from rag import (  # noqa: E402
     chunk_text,
     extract_text_from_html,
 )
-from report import build_markdown_brief, build_pdf_brief  # noqa: E402
+from report import (  # noqa: E402
+    _markdown_to_html_fragment,
+    build_markdown_brief,
+    build_pdf_brief,
+)
 from tools_extra import (  # noqa: E402
     EXTRA_TOOLS,
     FUNDAMENTAL_TOOLS,
@@ -201,6 +205,15 @@ def test_build_pdf_brief_returns_pdf_bytes() -> None:
     assert isinstance(pdf, (bytes, bytearray))
     assert pdf.startswith(b"%PDF"), "output must be a valid PDF"
     assert len(pdf) > 500
+
+
+def test_markdown_to_html_strips_hash_headings_for_pdf_engine() -> None:
+    """LLM answers use ``##`` / ``**`` Markdown; HTML output must not keep raw hashes."""
+    html = _markdown_to_html_fragment("## Section\n\n**Bold** and [a link](https://x.com).")
+    assert "<h2>" in html
+    assert "<strong>" in html
+    assert "<a " in html and "https://x.com" in html
+    assert "## Section" not in html
 
 
 # --------------------------------------------------------------------------- #

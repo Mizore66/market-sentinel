@@ -139,6 +139,9 @@ two download buttons:
 - **PDF** (via `fpdf2`) - printable A4 brief with sections for the
   question, sentiment chip, final answer, both specialist briefs, the
   full reasoning trail, and an auto-extracted source-URL list.
+  Prose sections are converted from **Markdown to HTML** (`markdown` library
+  + `FPDF.write_html`) so headings, bold, lists, links, tables, and fenced
+  code blocks render as real typography instead of raw `##` / `**` text.
 
 The PDF includes a research disclaimer in the footer.
 
